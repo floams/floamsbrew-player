@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>floamsbrew</title>
+    <!-- stylesheets -->
+    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- js libraries -->
+    <script src="assets/jszip.min.js"></script>
+    <script src="assets/jsmediatags.min.js"></script>
+    
+</head>
+<body data-theme="default">
+
+    <div class="player-container">
+        <header class="header">
+            <div class="title">floamsbrew</div>
+            <div class="top-right-controls controls">
+                <a href="#" id="loadFileLink"><i class="fas fa-file-audio"></i></a>
+                <input type="file" id="fileInput" accept=".mp3,.flac,.ogg,.zip" style="display: none;">
+                <input type="file" id="imageInput" accept="image/*" style="display: none;">
+                <a href="#" id="settingsLink"><i class="fas fa-cog"></i></a>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="album-art-container" id="albumArtContainer" title="Click to change cover art">
+                 <img id="albumArt" src="" alt="Album Art" style="display:none;">
+                 <span id="albumArtPlaceholder">cover</span>
+            </div>
+            <div class="info-and-name">
+                <div class="song-info song-metadata">
+                    <div class="artist">artist</div>
+                    <div class="album">album</div>
+                    <div class="release-date"></div>
+                </div>
+                <div id="songName" class="song-metadata" style="margin-top: 10px;">song name</div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <div class="footer-left">
+                <div class="volume-control" id="volumeControl">volume: 100%</div>
+                <div id="timeInfo">0:00 / 0:00</div>
+            </div>
+            <div class="playback-controls">
+                <i class="fas fa-backward-step" id="rewindBtn"></i>
+                <i class="fas fa-play" id="playPauseBtn"></i>
+                <i class="fas fa-forward-step" id="forwardBtn"></i>
+            </div>
+            <div class="version-info">
+                <a href="#" id="updateLink"><i class="fas fa-sync-alt"></i></a>
+                <span>v1.3</span>
+            </div>
+        </footer>
+    </div>
+
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Settings</h2>
+            <div class="settings-grid">
+                <label>Theme: <select id="themeSelector"><option value="default">Default</option><option value="classic">Classic</option></select></label>
+                <label><input type="checkbox" id="autoplayCheck" checked> Autoplay Next</label>
+                <label><input type="checkbox"> Show Visualizer</label>
+                <label><input type="checkbox"> Crossfade Tracks</label>
+            </div>
+            <button class="save-button">Save Changes</button>
+        </div>
+    </div>
+
+    <audio id="audioPlayer"></audio>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const LASTFM_API_KEY = '90b1244836d4492c78bbf3f57c3fe724';
+
+            // Element Constants
+            const audioPlayer = document.getElementById('audioPlayer');
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            const forwardBtn = document.getElementById('forwardBtn');
+            const rewindBtn = document.getElementById('rewindBtn');
+            const volumeControl = document.getElementById('volumeControl');
+            const timeInfo = document.getElementById('timeInfo');
+            const songNameDisplay = document.getElementById('songName');
+            const artistDisplay = document.querySelector('.artist');
+            const albumDisplay = document.querySelector('.album');
+            const releaseDateDisplay = document.querySelector('.release-date');
+            const albumArtContainer = document.getElementById('albumArtContainer');
+            const albumArt = document.getElementById('albumArt');
+            const albumArtPlaceholder = document.getElementById('albumArtPlaceholder');
+            const fileInput = document.getElementById('fileInput');
+            const imageInput = document.getElementById('imageInput');
+            const loadFileLink = document.getElementById('loadFileLink');
+            const songMetadataElements = document.querySelectorAll('.song-metadata');
+            const jsmediatags = window.jsmediatags;
+
+            let isPlaying = false;
+            let playlist = [];
+            let currentTrackIndex = -1;
+
+            // --- CORE PLAYER FUNCTIONS ---
+            function togglePlayPause() { if (playlist.length === 0) return; isPlaying ? audioPlayer.pause() : audioPlayer.play(); }
+            function loadSong(index) { if (index < 0 || index >= playlist.length) return; currentTrackIndex = index; const track = playlist[index]; processAudioData(track.fileObject, track.fileName); }
+            function handleRewind() { if (playlist.length === 0) return; if (audioPlayer.currentTime > 5 || currentTrackIndex === 0) { audioPlayer.currentTime = 0; } else { loadSong(currentTrackIndex - 1); } }
+            function handleForward() { if (currentTrackIndex < playlist.length - 1) { loadSong(currentTrackIndex + 1); } }
+
+            audioPlayer.onplay = () => { isPlaying = true; playPauseBtn.classList.replace('fa-play', 'fa-pause'); };
+            audioPlayer.onpause = () => { isPlaying = false; playPauseBtn.classList.replace('fa-pause', 'fa-play'); };
+            audioPlayer.onended = () => { if (document.getElementById('autoplayCheck').checked) { handleForward(); } };
+            audioPlayer.ontimeupdate = () => { if (!isNaN(audioPlayer.duration)) timeInfo.textContent = `${formatTime(audioPlayer.currentTime)} / ${formatTime(audioPlayer.duration)}`; };
+            function formatTime(seconds) { const m = Math.floor(seconds / 60); const s = Math.floor(seconds % 60); return `${m}:${s < 10 ? '0' : ''}${s}`; }
+
+            // --- METADATA & ART HANDLING ---
+            function processAudioData(fileObject, fileName) {
+                const objectURL = URL.createObjectURL(fileObject);
+                audioPlayer.src = objectURL;
+                audioPlayer.play();
+                resetMetadata();
+                songNameDisplay.textContent = fileName.replace(/\.[^/.]+$/, "");
+                songMetadataElements.forEach(el => el.style.visibility = 'visible');
+
+                jsmediatags.read(fileObject, {
+                    onSuccess: async (tag) => {
+                        const { title, artist, album, year, picture } = tag.tags;
+                        songNameDisplay.textContent = title || fileName.replace(/\.[^/.]+$/, "");
+                        artistDisplay.textContent = artist || 'artist';
+                        albumDisplay.textContent = album || 'album';
+                        releaseDateDisplay.textContent = year || '';
+
+                        let foundArt = await checkAndApplyArtCache(artist, album);
+
+                        if (!foundArt && picture) {
+                            const base64String = btoa(String.fromCharCode.apply(null, new Uint8Array(picture.data)));
+                            const dataUrl = `data:${picture.format};base64,${base64String}`;
+                            updateAlbumArt(dataUrl);
+                            cacheArt(artist, album, dataUrl);
+                        } else if (!foundArt) {
+                            fetchMetadataFromApis(artist, title || album, year, fileName);
+                        }
+                    },
+                    onError: () => fetchMetadataFromApis(null, null, null, fileName)
+                });
+            }
+
+            async function fetchMetadataFromApis(artist, title, year, fileName) {
+                const searchTerm = fileName ? fileName.replace(/\.[^/.]+$/, "").replace(/_/g, " ").replace(/\[.*?\]/g, "").trim() : `${artist} ${title}`;
+                
+                try { // iTunes API
+                    const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&entity=song&limit=1`);
+                    const data = await response.json();
+                    if (data.resultCount > 0) {
+                        const track = data.results[0];
+                        if (fileName) { artistDisplay.textContent = track.artistName; albumDisplay.textContent = track.collectionName; }
+                        if (!year) { releaseDateDisplay.textContent = new Date(track.releaseDate).toLocaleDateString(); }
+                        if (track.artworkUrl100) {
+                            const imageUrl = track.artworkUrl100.replace('100x100bb', '600x600bb');
+                            updateAlbumArt(imageUrl);
+                            cacheArtFromUrl(artistDisplay.textContent, albumDisplay.textContent, imageUrl);
+                            return; // Stop here if we found art
+                        }
+                    }
+                } catch (error) { console.error("iTunes API Error:", error); }
+
+                // Fallback to Last.fm
+                const finalArtist = artist || artistDisplay.textContent;
+                const finalTitle = title || songNameDisplay.textContent;
+                if (LASTFM_API_KEY !== '90b1244836d4492c78bbf3f57c3fe724' && finalArtist !== 'artist' && finalTitle !== 'song name') {
+                    try {
+                        const trackResponse = await fetch(`https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=${LASTFM_API_KEY}&artist=${encodeURIComponent(finalArtist)}&track=${encodeURIComponent(finalTitle)}&format=json`);
+                        const trackData = await trackResponse.json();
+                        if (trackData.track && trackData.track.album) {
+                             const imageUrl = trackData.track.album.image.find(img => img.size === 'extralarge')['#text'];
+                             if (imageUrl) {
+                                 updateAlbumArt(imageUrl);
+                                 cacheArtFromUrl(finalArtist, trackData.track.album.title, imageUrl);
+                             }
+                        }
+                    } catch(error) { console.error("Last.fm API Error:", error); }
+                }
+            }
+
+            // --- ART CACHING ---
+            function getCacheKey(artist, album) { return (artist && album) ? `coverart-${artist.toLowerCase()}-${album.toLowerCase()}` : null; }
+            
+            async function checkAndApplyArtCache(artist, album) {
+                const cacheKey = getCacheKey(artist, album);
+                const cachedArt = cacheKey ? sessionStorage.getItem(cacheKey) : null;
+                if (cachedArt) {
+                    updateAlbumArt(cachedArt);
+                    return true;
+                }
+                return false;
+            }
+            
+            function cacheArt(artist, album, dataUrl) {
+                const cacheKey = getCacheKey(artist, album);
+                if (cacheKey) sessionStorage.setItem(cacheKey, dataUrl);
+            }
+            
+            function cacheArtFromUrl(artist, album, url) {
+                fetch(url).then(res => res.blob()).then(blob => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => cacheArt(artist, album, e.target.result);
+                    reader.readAsDataURL(blob);
+                });
+            }
+
+            // --- UI & RESET ---
+            function updateAlbumArt(src) { albumArt.src = src; albumArt.style.display = 'block'; albumArtPlaceholder.style.display = 'none'; }
+            function resetMetadata() {
+                artistDisplay.textContent = 'artist'; albumDisplay.textContent = 'album'; releaseDateDisplay.textContent = 'release date';
+                albumArt.src = ''; albumArt.style.display = 'none'; albumArtPlaceholder.style.display = 'block';
+                songMetadataElements.forEach(el => el.style.visibility = 'hidden');
+            }
+
+            // --- FILE HANDLING ---
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0]; if (!file) return;
+                playlist = []; currentTrackIndex = -1;
+                if (file.name.endsWith('.zip')) { handleZipFile(file); } 
+                else { playlist.push({ fileObject: file, fileName: file.name }); loadSong(0); }
+            });
+
+            async function handleZipFile(file) {
+                try {
+                    const zip = await JSZip.loadAsync(file);
+                    const audioExt = ['.mp3', '.ogg', '.flac'];
+                    const audioFiles = Object.values(zip.files).filter(f => !f.dir && audioExt.some(ext => f.name.toLowerCase().endsWith(ext)));
+                    const trackPromises = audioFiles.map(async (audioFile) => {
+                        const blob = await audioFile.async('blob');
+                        return { fileObject: blob, fileName: audioFile.name };
+                    });
+                    playlist = await Promise.all(trackPromises);
+                    if (playlist.length > 0) { loadSong(0); } 
+                    else { alert("No playable audio files found in the ZIP archive."); }
+                } catch (error) { alert("Could not process the ZIP file."); }
+            }
+
+            // Manual Art Upload
+            albumArtContainer.addEventListener('click', () => imageInput.click());
+            imageInput.addEventListener('change', (e) => {
+                const file = e.target.files[0]; if (!file || playlist.length === 0) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const dataUrl = event.target.result;
+                    updateAlbumArt(dataUrl);
+                    cacheArt(artistDisplay.textContent, albumDisplay.textContent, dataUrl);
+                };
+                reader.readAsDataURL(file);
+            });
+
+            // --- UI EVENT LISTENERS ---
+            loadFileLink.addEventListener('click', (e) => { e.preventDefault(); fileInput.click(); });
+            playPauseBtn.addEventListener('click', togglePlayPause);
+            forwardBtn.addEventListener('click', handleForward);
+            rewindBtn.addEventListener('click', handleRewind);
+            volumeControl.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                let vol = audioPlayer.volume + (e.deltaY < 0 ? 0.05 : -0.05);
+                audioPlayer.volume = Math.max(0, Math.min(1, vol));
+                volumeControl.textContent = `volume: ${Math.round(audioPlayer.volume * 100)}%`;
+            });
+
+            // --- SETTINGS MODAL ---
+            const modal = document.getElementById('settingsModal'), settingsLink = document.getElementById('settingsLink');
+            const closeBtn = document.querySelector('.close-button'), saveBtn = document.querySelector('.save-button');
+            const themeSelector = document.getElementById('themeSelector');
+            settingsLink.addEventListener('click', (e) => { e.preventDefault(); modal.style.display = 'block'; });
+            closeBtn.addEventListener('click', () => modal.style.display = 'none');
+            window.addEventListener('click', (e) => { if (e.target == modal) modal.style.display = 'none'; });
+            saveBtn.addEventListener('click', () => {
+                const theme = themeSelector.value;
+                document.body.setAttribute('data-theme', theme);
+                localStorage.setItem('theme', theme);
+                modal.style.display = 'none';
+            });
+            const savedTheme = localStorage.getItem('theme') || 'default';
+            document.body.setAttribute('data-theme', savedTheme);
+            themeSelector.value = savedTheme;
+        });
+    </script>
+</body>
+</html>
