@@ -9,7 +9,9 @@
 <br>
 <br>
 <br>
-<br>
+## apis used
+* itunes (song data)
+* last.fm (backup song data)
 <br>
 <br>
 <br>
