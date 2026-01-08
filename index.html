@@ -1,5 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
+    <script>
+  document.addEventListener('DOMContentLoaded', (event) => {
+    console.log(`
+  ______   __                                              __           
+ /      \\ /  |                                            /  |          
+/$$$$$$  |$$ |  ______    ______   _____  ____    _______ $$/   _______ 
+$$ |_ $$/ $$ | /      \\ /      \\ /      \\/    \\  /       |/  | /       |
+$$   |    $$ |/$$$$$$  | $$$$$$  |$$$$$$ $$$$  |/$$$$$$$/ $$ |/$$$$$$$/ 
+$$$$/     $$ |$$ |  $$ | /    $$ |$$ | $$ | $$ |$$      \\ $$ |$$ |      
+$$ |      $$ |$$ \\__$$ |/$$$$$$$ |$$ | $$ | $$ | $$$$$$  |$$ |$$ \\_____ 
+$$ |      $$ |$$    $$/ $$    $$ |$$ | $$ | $$ |/     $$/ $$ |$$       |
+$$/       $$/  $$$$$$/   $$$$$$$/ $$/  $$/  $$/ $$$$$$$/  $$/  $$$$$$$/ 
+                               
+\n
+-----------------------------------------------------------------------                                                                      
+                                                                       
+\n floamsic - v1.3 - github.com/floams/floamsbrew-player
+    `);
+  });
+</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -159,12 +179,12 @@
                             const imageUrl = track.artworkUrl100.replace('100x100bb', '600x600bb');
                             updateAlbumArt(imageUrl);
                             cacheArtFromUrl(artistDisplay.textContent, albumDisplay.textContent, imageUrl);
-                            return; // Stop here if we found art
+                            return; // stop here if we found art
                         }
                     }
                 } catch (error) { console.error("iTunes API Error:", error); }
 
-                // Fallback to Last.fm
+                // fallback to Last.fm
                 const finalArtist = artist || artistDisplay.textContent;
                 const finalTitle = title || songNameDisplay.textContent;
                 if (LASTFM_API_KEY !== '90b1244836d4492c78bbf3f57c3fe724' && finalArtist !== 'artist' && finalTitle !== 'song name') {
@@ -182,7 +202,7 @@
                 }
             }
 
-            // --- ART CACHING ---
+            // art caching
             function getCacheKey(artist, album) { return (artist && album) ? `coverart-${artist.toLowerCase()}-${album.toLowerCase()}` : null; }
             
             async function checkAndApplyArtCache(artist, album) {
@@ -208,7 +228,7 @@
                 });
             }
 
-            // --- UI & RESET ---
+            // ui & reset
             function updateAlbumArt(src) { albumArt.src = src; albumArt.style.display = 'block'; albumArtPlaceholder.style.display = 'none'; }
             function resetMetadata() {
                 artistDisplay.textContent = 'artist'; albumDisplay.textContent = 'album'; releaseDateDisplay.textContent = 'release date';
@@ -216,7 +236,7 @@
                 songMetadataElements.forEach(el => el.style.visibility = 'hidden');
             }
 
-            // --- FILE HANDLING ---
+            // file handling
             fileInput.addEventListener('change', (e) => {
                 const file = e.target.files[0]; if (!file) return;
                 playlist = []; currentTrackIndex = -1;
@@ -239,7 +259,7 @@
                 } catch (error) { alert("Could not process the ZIP file."); }
             }
 
-            // Manual Art Upload
+            // cover art uploader
             albumArtContainer.addEventListener('click', () => imageInput.click());
             imageInput.addEventListener('change', (e) => {
                 const file = e.target.files[0]; if (!file || playlist.length === 0) return;
@@ -264,7 +284,7 @@
                 volumeControl.textContent = `volume: ${Math.round(audioPlayer.volume * 100)}%`;
             });
 
-            // --- SETTINGS MODAL ---
+            // settings
             const modal = document.getElementById('settingsModal'), settingsLink = document.getElementById('settingsLink');
             const closeBtn = document.querySelector('.close-button'), saveBtn = document.querySelector('.save-button');
             const themeSelector = document.getElementById('themeSelector');
@@ -283,4 +303,5 @@
         });
     </script>
 </body>
+
 </html>
